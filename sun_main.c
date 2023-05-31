@@ -265,13 +265,13 @@ int main(int argc, char* argv[]) {
     pthread_t* threads = (pthread_t*)malloc(num_threads * sizeof(pthread_t));
     printf("----\n");
 
-    /*for (int i = 0; i < num_threads; i++) {
+    for (int i = 0; i < num_threads; i++) { // multi-threads
         pthread_create(&threads[i], NULL, thread_work, dir_path);
         //printf("ifififif\n");
-    }*/
+    }
 
     pthread_join(main_thread, NULL);
-
+    printf("bbb\n");
     for (int i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
