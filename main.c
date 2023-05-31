@@ -71,13 +71,14 @@ void process_file(const char* file_path) {
     struct stat file_stat;
     stat(file_path, &file_stat);
     file_info->file_size = file_stat.st_size;
-
+    //printf("before thread total_file num :%d\n", total_files);
     pthread_mutex_lock(&mutex);
     total_files++;
     pthread_mutex_unlock(&mutex);
-
+    //printf("after thread total_file num :%d\n", total_files);
     FILE* fp = fopen(output_file, "a");
     if (fp != NULL) {
+
         fprintf(fp, "%s\n", file_path);
         fclose(fp);
     }
@@ -114,7 +115,7 @@ void process_file(const char* file_path) {
 
                     FILE* fp = fopen(output_file, "a");
                     if (fp != NULL) {
-                        fprintf(fp, "%s\n", other_file_path);
+                        fprintf(fp, "aa-  %s\n", other_file_path);
                         fclose(fp);
                     }
                 }
@@ -208,7 +209,7 @@ int main(int argc, char* argv[]) {
         else if (strncmp(argv[i], "-o=",3)==0){
             output_file = optarg;
             output_fp = fopen(output_file, "w");
-            printf("oooo\n");
+            //printf("oooo\n");
             if (output_fp == NULL) {
                 fprintf(stderr, "Error: Cannot open output file '%s'\n", output_file);
                 return 1;
@@ -256,26 +257,25 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-//--------------여기까지 ok(5/31)
-
     pthread_mutex_init(&mutex, NULL);
 
     pthread_t main_thread;
     pthread_create(&main_thread, NULL, thread_work, dir_path);
-    printf("ififififififififififif\n");
+   
     pthread_t* threads = (pthread_t*)malloc(num_threads * sizeof(pthread_t));
     printf("----\n");
-    for (int i = 0; i < num_threads; i++) {
+
+    /*for (int i = 0; i < num_threads; i++) {
         pthread_create(&threads[i], NULL, thread_work, dir_path);
-        printf("ifififif\n");
-    }
+        //printf("ifififif\n");
+    }*/
 
     pthread_join(main_thread, NULL);
 
     for (int i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
-
+    printf("the end\n");
     print_progress();
 
     pthread_mutex_destroy(&mutex);
