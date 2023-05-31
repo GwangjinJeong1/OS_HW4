@@ -94,32 +94,35 @@ void process_file(const char* file_path) {
     if (is_regular_file(file_path)) {
         dir = opendir(".");
         while ((entry = readdir(dir)) != NULL) {
-            if (!is_hidden_file(entry->d_name)) {
-                char* other_file_path = strdup(entry->d_name);
-                if (strcmp(file_path, other_file_path) != 0 && is_regular_file(other_file_path)) {
-                    FileInfo* other_file_info = (FileInfo*)malloc(sizeof(FileInfo));
-                    other_file_info->file_path = other_file_path;
-
-                    struct stat other_file_stat;
-                    stat(other_file_path, &other_file_stat);
-                    other_file_info->file_size = other_file_stat.st_size;
-
-                    if (is_duplicate(file_info, other_file_info)) {
-                        pthread_mutex_lock(&mutex);
-                        total_duplicates++;
-                        pthread_mutex_unlock(&mutex);
-
-                        FILE* fp = fopen(output_file, "a");
-                        if (fp != NULL) {
-                            fprintf(fp, "%s\n", other_file_path);
-                            fclose(fp);
-                        }
-                    }
-
-                    free(other_file_info);
-                }
-                free(other_file_path);
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                continue;
             }
+    
+            char* other_file_path = strdup(entry->d_name);
+            if (strcmp(file_path, other_file_path) != 0 && is_regular_file(other_file_path)) {
+                FileInfo* other_file_info = (FileInfo*)malloc(sizeof(FileInfo));
+                other_file_info->file_path = other_file_path;
+
+                struct stat other_file_stat;
+                stat(other_file_path, &other_file_stat);
+                other_file_info->file_size = other_file_stat.st_size;
+
+                if (is_duplicate(file_info, other_file_info)) {
+                    pthread_mutex_lock(&mutex);
+                    total_duplicates++;
+                    pthread_mutex_unlock(&mutex);
+
+                    FILE* fp = fopen(output_file, "a");
+                    if (fp != NULL) {
+                        fprintf(fp, "%s\n", other_file_path);
+                        fclose(fp);
+                    }
+                }
+
+                free(other_file_info);
+            }
+            free(other_file_path);
+            
         }
         closedir(dir);
     }
@@ -145,7 +148,7 @@ void traverse_directory(const char* dir_path) {
         }
         
         snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name);
-        printf("path%s\n",entry->d_name );
+        //printf("path%s\n",entry->d_name );
         if (entry->d_type == DT_DIR) {
             traverse_directory(path);
         } else {
@@ -164,7 +167,7 @@ void print_progress() {
 
 void* thread_work(void* arg) {
     char* dir_path = (char*)arg;
-    printf("dir%s\n", dir_path);
+    //printf("dir%s\n", dir_path);
     traverse_directory(dir_path);
     return NULL;
 }
