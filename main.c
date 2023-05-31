@@ -181,22 +181,27 @@ int main(int argc, char* argv[]) {
     int opt;
     char *optarg;
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-t=")==0){
+        if (strncmp(argv[i], "-t=", 3)==0){
             optarg = argv[i]+3;
+            
             num_threads = atoi(optarg);
+           
                 if (num_threads <= 0 || num_threads > 64) {
                     fprintf(stderr, "Error: Invalid number of threads.\n");
                     return 1;
                 }
         }
-        else if (strcmp(argv[i], "-m=")==0){
+        else if (strncmp(argv[i], "-m=", 3)==0){
             optarg = argv[i]+3;
+            
             file_size_limit = atoi(optarg);
+            
             break;
         }
-        else if (strcmp(argv[i], "-o=")==0){
+        else if (strncmp(argv[i], "-o=",3)==0){
             output_file = optarg;
             output_fp = fopen(output_file, "w");
+            printf("oooo\n");
             if (output_fp == NULL) {
                 fprintf(stderr, "Error: Cannot open output file '%s'\n", output_file);
                 return 1;
@@ -235,8 +240,8 @@ int main(int argc, char* argv[]) {
     if (output_file == NULL) {
         output_file = "/dev/stdout";
     }
-
-    char* dir_path = argv[optind];
+    
+    char* dir_path = argv[argc-1];
     DIR* dir = opendir(dir_path);
 
     if (dir == NULL) {
