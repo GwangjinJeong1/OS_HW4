@@ -29,9 +29,9 @@ int is_regular_file(const char* path) {
     return S_ISREG(path_stat.st_mode);
 }
 
-int is_hidden_file(const char* filename) {
-    return (filename[0] == '.' && strcmp(filename, ".") != 0 && strcmp(filename, "..") != 0);
-}
+/*int is_hidden_file(const char* filename) {
+    return (strcmp(filename, ".") != 0 || strcmp(filename, "..") != 0);
+}*/
 
 int is_duplicate(const FileInfo* file1, const FileInfo* file2) {
     if (file1->file_size != file2->file_size) {
@@ -140,15 +140,18 @@ void traverse_directory(const char* dir_path) {
     }
 
     while ((entry = readdir(dir)) != NULL) {
-        if (!is_hidden_file(entry->d_name)) {
-            snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name);
-
-            if (entry->d_type == DT_DIR) {
-                traverse_directory(path);
-            } else {
-                process_file(path);
-            }
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
         }
+        
+        snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name);
+        printf("path%s\n",entry->d_name );
+        if (entry->d_type == DT_DIR) {
+            traverse_directory(path);
+        } else {
+            process_file(path);
+        }
+        
     }
 
     closedir(dir);
@@ -161,6 +164,7 @@ void print_progress() {
 
 void* thread_work(void* arg) {
     char* dir_path = (char*)arg;
+    printf("dir%s\n", dir_path);
     traverse_directory(dir_path);
     return NULL;
 }
@@ -240,7 +244,7 @@ int main(int argc, char* argv[]) {
     if (output_file == NULL) {
         output_file = "/dev/stdout";
     }
-    
+
     char* dir_path = argv[argc-1];
     DIR* dir = opendir(dir_path);
 
@@ -249,15 +253,18 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+//--------------여기까지 ok(5/31)
+
     pthread_mutex_init(&mutex, NULL);
 
     pthread_t main_thread;
     pthread_create(&main_thread, NULL, thread_work, dir_path);
-
+    printf("ififififififififififif\n");
     pthread_t* threads = (pthread_t*)malloc(num_threads * sizeof(pthread_t));
-
+    printf("----\n");
     for (int i = 0; i < num_threads; i++) {
         pthread_create(&threads[i], NULL, thread_work, dir_path);
+        printf("ifififif\n");
     }
 
     pthread_join(main_thread, NULL);
