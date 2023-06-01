@@ -13,14 +13,23 @@ char* output_file;
 FILE* output_fp;
 int total_files;
 int total_duplicates;
+char *real_duplicate_path;
 #define PATH_MAX 1024
 
-
+int count=0;
 typedef struct {
     char* file_path;
     off_t file_size;
 } FileInfo;
 
+typedef struct {
+    char filename[100];
+    char filepath[100];
+   
+} DuplicateFile;
+DuplicateFile duplicate_files[1000];
+/*char *duple_filename;
+char *duple_filepath[1000];*/
 void print_progress();
 
 int is_regular_file(const char* path) {
@@ -71,11 +80,13 @@ void process_file(const char* file_path) {
     struct stat file_stat;
     stat(file_path, &file_stat);
     file_info->file_size = file_stat.st_size;
-    //printf("before thread total_file num :%d\n", total_files);
+    char * tok = strrchr(file_path, '/');
+    char *file_name = tok+1;
+  
     pthread_mutex_lock(&mutex);
     total_files++;
     pthread_mutex_unlock(&mutex);
-    //printf("after thread total_file num :%d\n", total_files);
+
     FILE* fp = fopen(output_file, "a");
     if (fp != NULL) {
 
@@ -99,35 +110,41 @@ void process_file(const char* file_path) {
                 continue;
             }
     
-            char* other_file_path = strdup(entry->d_name);
-            if (strcmp(file_path, other_file_path) != 0 && is_regular_file(other_file_path)) {
+            char* other_file_name = strdup(entry->d_name);
+            if (strcmp(file_path, other_file_name) != 0 && is_regular_file(other_file_name)) {
                 FileInfo* other_file_info = (FileInfo*)malloc(sizeof(FileInfo));
-                other_file_info->file_path = other_file_path;
+                other_file_info->file_path = other_file_name;
 
                 struct stat other_file_stat;
-                stat(other_file_path, &other_file_stat);
+                stat(other_file_name, &other_file_stat);
                 other_file_info->file_size = other_file_stat.st_size;
 
                 if (is_duplicate(file_info, other_file_info)) {
                     pthread_mutex_lock(&mutex);
                     total_duplicates++;
                     pthread_mutex_unlock(&mutex);
+                    
 
+                    strcpy(duplicate_files[count].filename , file_name);
+                    strcpy(duplicate_files[count].filepath , file_path);
+                    
+                    count++;
+                    /*printf("duple : %s\n", file_path);
                     FILE* fp = fopen(output_file, "a");
                     if (fp != NULL) {
-                        fprintf(fp, "aa-  %s\n", other_file_path);
+                        fprintf(fp, "aa-  %s\n", other_file_name);
                         fclose(fp);
-                    }
+                    }*/
                 }
 
                 free(other_file_info);
             }
-            free(other_file_path);
+            free(other_file_name);
             
         }
         closedir(dir);
     }
-
+    
     free(file_info);
 }
 
@@ -172,14 +189,36 @@ void* thread_work(void* arg) {
     traverse_directory(dir_path);
     return NULL;
 }
-
+void print_result(){
+    printf("[\n");
+    int first=1;
+    for(int i=0;i<count;i++){
+        if(strcmp(duplicate_files[i].filename, duplicate_files[i+1].filename)!=0){
+            if(!first){
+                printf("    ]\n");
+                printf("]\n");
+            }
+            first=1;
+        }
+       
+        if(strcmp(duplicate_files[i].filename, duplicate_files[i+1].filename)==0){
+            if(first){
+                printf("   [\n");
+                first=0;
+            }
+            if(i%(num_threads+1)==0)
+                printf("%s,\n", duplicate_files[i].filepath);
+        }
+       
+    }
+}
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Error: Directory path is required.\n");
         return 1;
     }
 
-    num_threads = 1;
+    num_threads = 0;
     file_size_limit = 1024;
     output_file = NULL;
     output_fp = stdout;
@@ -207,6 +246,7 @@ int main(int argc, char* argv[]) {
             break;
         }
         else if (strncmp(argv[i], "-o=",3)==0){
+            optarg = argv[i]+3;
             output_file = optarg;
             output_fp = fopen(output_file, "w");
             //printf("oooo\n");
@@ -277,7 +317,8 @@ int main(int argc, char* argv[]) {
     }
     printf("the end\n");
     print_progress();
-
+    
+    print_result();
     pthread_mutex_destroy(&mutex);
     closedir(dir);
     free(threads);
