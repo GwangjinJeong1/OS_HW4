@@ -6,6 +6,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <limits.h>
+#include <signal.h>
 pthread_mutex_t mutex;
 int num_threads;
 int file_size_limit;
@@ -15,7 +16,7 @@ int total_files;
 int total_duplicates;
 char *real_duplicate_path;
 #define PATH_MAX 1024
-
+int terminate_threads = 0;
 int count=0;
 typedef struct {
     char* file_path;
@@ -87,12 +88,12 @@ void process_file(const char* file_path) {
     total_files++;
     pthread_mutex_unlock(&mutex);
 
-    FILE* fp = fopen(output_file, "a");
+    /*FILE* fp = fopen(output_file, "a");
     if (fp != NULL) {
 
         fprintf(fp, "%s\n", file_path);
         fclose(fp);
-    }
+    }*/
 
     pthread_mutex_lock(&mutex);
     if (total_files % 5 == 0) {
@@ -179,9 +180,13 @@ void traverse_directory(const char* dir_path) {
 }
 
 void print_progress() {
+    time_t current_time = time(NULL);
+    fprintf(stderr, "Search progress: %d files processed, %d duplicates found. Time: %s", total_files, total_duplicates, ctime(&current_time));
+}
+/*void print_progress() {
     printf("Files processed: %d, Duplicates found: %d\n", total_files, total_duplicates);
     fflush(stdout);
-}
+}*/
 
 void* thread_work(void* arg) {
     char* dir_path = (char*)arg;
@@ -190,28 +195,35 @@ void* thread_work(void* arg) {
     return NULL;
 }
 void print_result(){
-    printf("[\n");
+    FILE* fp = fopen(output_file, "a");
+    fprintf(fp, "[\n");
     int first=1;
     for(int i=0;i<count;i++){
         if(strcmp(duplicate_files[i].filename, duplicate_files[i+1].filename)!=0){
             if(!first){
-                printf("    ]\n");
-                printf("]\n");
+                fprintf(fp, "    ]\n");
+                fprintf(fp, "]\n");
             }
             first=1;
         }
        
         if(strcmp(duplicate_files[i].filename, duplicate_files[i+1].filename)==0){
             if(first){
-                printf("   [\n");
+                fprintf(fp, "   [\n");
                 first=0;
             }
             if(i%(num_threads+1)==0)
-                printf("%s,\n", duplicate_files[i].filepath);
+                fprintf(fp, "%s,\n", duplicate_files[i].filepath);
         }
        
     }
 }
+void sigint_handler(int signum) {
+    printf("\nSIGINT received. Printing result...\n");
+    print_result();
+    exit(0);
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Error: Directory path is required.\n");
@@ -296,22 +308,32 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Error: Cannot open directory '%s'\n", dir_path);
         return 1;
     }
-
+  signal(SIGINT, sigint_handler);
     pthread_mutex_init(&mutex, NULL);
 
     pthread_t main_thread;
     pthread_create(&main_thread, NULL, thread_work, dir_path);
    
     pthread_t* threads = (pthread_t*)malloc(num_threads * sizeof(pthread_t));
-    printf("----\n");
+    //rintf("----\n");
 
     for (int i = 0; i < num_threads; i++) { // multi-threads
         pthread_create(&threads[i], NULL, thread_work, dir_path);
         //printf("ifififif\n");
     }
+    while (!terminate_threads)
+        sleep(1);
 
+    while (1) {
+        sleep(5);
+        pthread_mutex_lock(&mutex);
+        print_progress();
+        pthread_mutex_unlock(&mutex);
+        
+    }
+    
     pthread_join(main_thread, NULL);
-    printf("bbb\n");
+    //printf("bbb\n");
     for (int i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
