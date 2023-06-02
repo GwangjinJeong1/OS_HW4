@@ -16,3 +16,7 @@ gcc -pthread -o findeq findeq.c
 ```c
 ./findeq -t=8 -m=2048 ./Files
 ```
+
+```c
+./findeq -o=result ./Files
+```
