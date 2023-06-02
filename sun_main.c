@@ -52,17 +52,26 @@ int is_duplicate(const FileInfo* file1, const FileInfo* file2) {
     FILE* fp2 = fopen(file2->file_path, "rb");
 
     if (fp1 == NULL || fp2 == NULL) {
+        if (fp1 != NULL) {
+            fclose(fp1);
+        }
+        if (fp2 != NULL) {
+            fclose(fp2);
+        }
         return 0;
     }
 
     int result = 1;
-    char byte1, byte2;
+    const size_t buffer_size = 4096;
+    char buffer1[buffer_size];
+    char buffer2[buffer_size];
 
     while (!feof(fp1) && !feof(fp2)) {
-        fread(&byte1, 1, 1, fp1);
-        fread(&byte2, 1, 1, fp2);
+        size_t bytes_read1 = fread(buffer1, 1, buffer_size, fp1);
+        size_t bytes_read2 = fread(buffer2, 1, buffer_size, fp2);
 
-        if (byte1 != byte2) {
+        if (bytes_read1 != bytes_read2 ||
+            memcmp(buffer1, buffer2, bytes_read1) != 0) {
             result = 0;
             break;
         }
