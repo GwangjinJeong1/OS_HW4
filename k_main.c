@@ -1,4 +1,3 @@
-//Still working on
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -9,30 +8,32 @@
 #include <limits.h>
 #include <signal.h>
 
+
 pthread_mutex_t mutex;
 int num_threads;
 int file_size_limit;
+char* output_file;
+FILE* output_fp;
 int total_files;
 int total_duplicates;
-int count;
-char output_file[100];
-FILE* output_fp;
+char *real_duplicate_path;
+#define PATH_MAX 1024
+int terminate_threads = 0;
+int count=0;
+
+typedef struct {
+    char* file_path;
+    off_t file_size;
+} FileInfo;
 
 typedef struct {
     char filename[100];
-    char filepath[PATH_MAX];
+    char filepath[100];
 } DuplicateFile;
 
 DuplicateFile duplicate_files[1000];
 
-void* thread_work(void* arg);
-int is_regular_file(const char* path);
-int is_duplicate(const char* file1, const char* file2);
-void process_file(const char* file_path);
-void traverse_directory(const char* dir_path);
 void print_progress();
-void print_result();
-void sigint_handler(int sig);
 
 int is_regular_file(const char* path) {
     struct stat path_stat;
@@ -40,22 +41,32 @@ int is_regular_file(const char* path) {
     return S_ISREG(path_stat.st_mode);
 }
 
-int is_duplicate(const char* file1, const char* file2) {
-    FILE* fp1 = fopen(file1, "rb");
-    FILE* fp2 = fopen(file2, "rb");
+int is_hidden_file(const char* filename) {
+    return (strcmp(filename, ".") != 0 && strcmp(filename, "..") != 0);
+}
+
+int is_duplicate(const FileInfo* file1, const FileInfo* file2) {
+    if (file1->file_size != file2->file_size) {
+        return 0;
+    }
+
+    FILE* fp1 = fopen(file1->file_path, "rb");
+    FILE* fp2 = fopen(file2->file_path, "rb");
 
     if (fp1 == NULL || fp2 == NULL) {
         return 0;
     }
 
     int result = 1;
-    char byte1, byte2;
+    char buffer1[1024];
+    char buffer2[1024];
+    size_t bytesRead1, bytesRead2;
 
     while (!feof(fp1) && !feof(fp2)) {
-        fread(&byte1, 1, 1, fp1);
-        fread(&byte2, 1, 1, fp2);
+        bytesRead1 = fread(buffer1, 1, sizeof(buffer1), fp1);
+        bytesRead2 = fread(buffer2, 1, sizeof(buffer2), fp2);
 
-        if (byte1 != byte2) {
+        if (bytesRead1 != bytesRead2 || memcmp(buffer1, buffer2, bytesRead1) != 0) {
             result = 0;
             break;
         }
@@ -68,20 +79,24 @@ int is_duplicate(const char* file1, const char* file2) {
 }
 
 void process_file(const char* file_path) {
+    FileInfo* file_info = (FileInfo*)malloc(sizeof(FileInfo));
+    file_info->file_path = strdup(file_path);
+
     struct stat file_stat;
     stat(file_path, &file_stat);
-    off_t file_size = file_stat.st_size;
-    char* file_name = strrchr(file_path, '/') + 1;
+    file_info->file_size = file_stat.st_size;
+    char * tok = strrchr(file_path, '/');
+    char *file_name = tok+1;
 
     pthread_mutex_lock(&mutex);
     total_files++;
     pthread_mutex_unlock(&mutex);
 
+    pthread_mutex_lock(&mutex);
     if (total_files % 5 == 0) {
-        pthread_mutex_lock(&mutex);
         print_progress();
-        pthread_mutex_unlock(&mutex);
     }
+    pthread_mutex_unlock(&mutex);
 
     DIR* dir;
     struct dirent* entry;
@@ -93,24 +108,34 @@ void process_file(const char* file_path) {
                 continue;
             }
 
-            char* other_file_name = entry->d_name;
-            if (strcmp(file_name, other_file_name) != 0 && is_regular_file(other_file_name)) {
-                if (is_duplicate(file_path, other_file_name)) {
+            char* other_file_name = strdup(entry->d_name);
+            if (strcmp(file_path, other_file_name) != 0 && is_regular_file(other_file_name)) {
+                FileInfo* other_file_info = (FileInfo*)malloc(sizeof(FileInfo));
+                other_file_info->file_path = other_file_name;
+
+                struct stat other_file_stat;
+                stat(other_file_name, &other_file_stat);
+                other_file_info->file_size = other_file_stat.st_size;
+
+                if (is_duplicate(file_info, other_file_info)) {
                     pthread_mutex_lock(&mutex);
                     total_duplicates++;
-
-                    if (count < 1000) {
-                        strcpy(duplicate_files[count].filename, file_name);
-                        strcpy(duplicate_files[count].filepath, file_path);
-                        count++;
-                    }
-
                     pthread_mutex_unlock(&mutex);
+
+                    strcpy(duplicate_files[count].filename , file_name);
+                    strcpy(duplicate_files[count].filepath , file_path);
+
+                    count++;
                 }
+
+                free(other_file_info);
             }
+            free(other_file_name);
         }
         closedir(dir);
     }
+
+    free(file_info);
 }
 
 void traverse_directory(const char* dir_path) {
@@ -147,44 +172,40 @@ void print_progress() {
     fprintf(stderr, "Search progress: %d files processed, %d duplicates found. Time: %s", total_files, total_duplicates, ctime(&current_time));
 }
 
-void print_result() {
-    FILE* fp = fopen(output_file, "w");
-    fprintf(fp, "[\n");
-    int first = 1;
-
-    for (int i = 0; i < count; i++) {
-        if (strcmp(duplicate_files[i].filename, duplicate_files[i + 1].filename) != 0) {
-            if (!first) {
-                fprintf(fp, "    ]\n");
-                fprintf(fp, "]\n");
-            }
-            first = 1;
-        }
-
-        if (strcmp(duplicate_files[i].filename, duplicate_files[i + 1].filename) == 0) {
-            if (first) {
-                fprintf(fp, "   [\n");
-                first = 0;
-            }
-            if (i % (num_threads + 1) == 0) {
-                fprintf(fp, "    %s,\n", duplicate_files[i].filepath);
-            }
-        }
-    }
-
-    fclose(fp);
-}
-
-void sigint_handler(int sig) {
-    printf("\nSIGINT received. Printing result...\n");
-    print_result();
-    exit(0);
-}
-
 void* thread_work(void* arg) {
     char* dir_path = (char*)arg;
     traverse_directory(dir_path);
     return NULL;
+}
+
+void print_result(){
+    FILE* fp = fopen(output_file, "a");
+    fprintf(fp, "[\n");
+    int first=1;
+    for(int i=0;i<count;i++){
+        if(strcmp(duplicate_files[i].filename, duplicate_files[i+1].filename)!=0){
+            if(!first){
+                fprintf(fp, "    ]\n");
+                fprintf(fp, "]\n");
+            }
+            first=1;
+        }
+
+        if(strcmp(duplicate_files[i].filename, duplicate_files[i+1].filename)==0){
+            if(first){
+                fprintf(fp, "   [\n");
+                first=0;
+            }
+            if(i%(num_threads+1)==0)
+                fprintf(fp, "%s,\n", duplicate_files[i].filepath);
+        }
+    }
+}
+
+void sigint_handler(int signum) {
+    printf("\nSIGINT received. Printing result...\n");
+    print_result();
+    exit(0);
 }
 
 int main(int argc, char* argv[]) {
@@ -195,70 +216,85 @@ int main(int argc, char* argv[]) {
 
     num_threads = 0;
     file_size_limit = 1024;
+    output_file = NULL;
+    output_fp = stdout;
     total_files = 0;
     total_duplicates = 0;
-    count = 0;
-    output_fp = NULL;
 
     int opt;
-    char* optarg;
-
+    char *optarg;
     for (int i = 1; i < argc; i++) {
-        if (strncmp(argv[i], "-t=", 3) == 0) {
-            optarg = argv[i] + 3;
+        if (strncmp(argv[i], "-t=", 3)==0){
+            optarg = argv[i]+3;
             num_threads = atoi(optarg);
-
             if (num_threads <= 0 || num_threads > 64) {
                 fprintf(stderr, "Error: Invalid number of threads.\n");
                 return 1;
             }
-        } else if (strncmp(argv[i], "-m=", 3) == 0) {
-            optarg = argv[i] + 3;
+        }
+        else if (strncmp(argv[i], "-m=", 3)==0){
+            optarg = argv[i]+3;
             file_size_limit = atoi(optarg);
-        } else if (strncmp(argv[i], "-o=", 3) == 0) {
-            optarg = argv[i] + 3;
-            strcpy(output_file, optarg);
+            break;
+        }
+        else if (strncmp(argv[i], "-o=",3)==0){
+            optarg = argv[i]+3;
+            output_file = optarg;
             output_fp = fopen(output_file, "w");
-
             if (output_fp == NULL) {
                 fprintf(stderr, "Error: Cannot open output file '%s'\n", output_file);
                 return 1;
             }
+            break;
         }
     }
 
-    if (output_fp == NULL) {
-        strcpy(output_file, "/dev/stdout");
-        output_fp = stdout;
+    if (output_file == NULL) {
+        output_file = "/dev/stdout";
     }
 
-    char* dir_path = argv[argc - 1];
+    char* dir_path = argv[argc-1];
     DIR* dir = opendir(dir_path);
 
     if (dir == NULL) {
         fprintf(stderr, "Error: Cannot open directory '%s'\n", dir_path);
         return 1;
     }
-
-    closedir(dir);
-
     signal(SIGINT, sigint_handler);
-
     pthread_mutex_init(&mutex, NULL);
-    pthread_t* threads = malloc(num_threads * sizeof(pthread_t));
+
+    pthread_t main_thread;
+    pthread_create(&main_thread, NULL, thread_work, dir_path);
+
+    pthread_t* threads = (pthread_t*)malloc(num_threads * sizeof(pthread_t));
 
     for (int i = 0; i < num_threads; i++) {
-        pthread_create(&threads[i], NULL, thread_work, (void*)dir_path);
+        pthread_create(&threads[i], NULL, thread_work, dir_path);
     }
+
+    while (1) {
+        sleep(5);
+        pthread_mutex_lock(&mutex);
+        print_progress();
+        pthread_mutex_unlock(&mutex);
+    }
+
+    pthread_join(main_thread, NULL);
 
     for (int i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
 
+    printf("the end\n");
+    print_progress();
     print_result();
-
-    free(threads);
     pthread_mutex_destroy(&mutex);
+    closedir(dir);
+    free(threads);
+
+    if (output_fp != stdout) {
+        fclose(output_fp);
+    }
 
     return 0;
 }
