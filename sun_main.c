@@ -39,9 +39,6 @@ int is_regular_file(const char* path) {
     return S_ISREG(path_stat.st_mode);
 }
 
-/*int is_hidden_file(const char* filename) {
-    return (strcmp(filename, ".") != 0 || strcmp(filename, "..") != 0);
-}*/
 
 int is_duplicate(const FileInfo* file1, const FileInfo* file2) {
     if (file1->file_size != file2->file_size) {
@@ -130,21 +127,23 @@ void process_file(const char* file_path) {
                 other_file_info->file_size = other_file_stat.st_size;
 
                 if (is_duplicate(file_info, other_file_info)) {
-                    pthread_mutex_lock(&mutex);
-                    total_duplicates++;
-                    pthread_mutex_unlock(&mutex);
-                    
+                    if(file_info -> file_size >= file_size_limit && other_file_info->file_size >= file_size_limit){
+                        pthread_mutex_lock(&mutex);
+                        total_duplicates++;
+                        pthread_mutex_unlock(&mutex);
+                        
 
-                    strcpy(duplicate_files[count].filename , file_name);
-                    strcpy(duplicate_files[count].filepath , file_path);
-                    
-                    count++;
-                    /*printf("duple : %s\n", file_path);
-                    FILE* fp = fopen(output_file, "a");
-                    if (fp != NULL) {
-                        fprintf(fp, "aa-  %s\n", other_file_name);
-                        fclose(fp);
-                    }*/
+                        strcpy(duplicate_files[count].filename , file_name);
+                        strcpy(duplicate_files[count].filepath , file_path);
+                        
+                        count++;
+                        /*printf("duple : %s\n", file_path);
+                        FILE* fp = fopen(output_file, "a");
+                        if (fp != NULL) {
+                            fprintf(fp, "aa-  %s\n", other_file_name);
+                            fclose(fp);
+                        }*/
+                    }
                 }
 
                 free(other_file_info);
@@ -240,9 +239,9 @@ int main(int argc, char* argv[]) {
     }
 
     num_threads = 0;
-    file_size_limit = 1024;
+    file_size_limit = 1024; //defualt
     output_file = NULL;
-    output_fp = stdout;
+    output_fp = stdout; //defualt
     total_files = 0;
     total_duplicates = 0;
 
@@ -279,33 +278,7 @@ int main(int argc, char* argv[]) {
         }
     
     }
-/*
-    while ((opt = getopt(argc, argv, "t:m:o:")) != -1) {
-        switch (opt) {
-            case 't':
-                num_threads = atoi(optarg);
-                if (num_threads <= 0 || num_threads > 64) {
-                    fprintf(stderr, "Error: Invalid number of threads.\n");
-                    return 1;
-                }
-                break;
-            case 'm':
-                file_size_limit = atoi(optarg);
-                break;
-            case 'o':
-                output_file = optarg;
-                output_fp = fopen(output_file, "w");
-                if (output_fp == NULL) {
-                    fprintf(stderr, "Error: Cannot open output file '%s'\n", output_file);
-                    return 1;
-                }
-                break;
-            default:
-                fprintf(stderr, "Error: Invalid option '%c'\n", opt);
-                return 1;
-        }
-    }
-*/
+
     if (output_file == NULL) {
         output_file = "/dev/stdout";
     }
