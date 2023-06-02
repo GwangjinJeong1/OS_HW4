@@ -29,8 +29,7 @@ typedef struct {
    
 } DuplicateFile;
 DuplicateFile duplicate_files[1000];
-/*char *duple_filename;
-char *duple_filepath[1000];*/
+
 void print_progress();
 
 int is_regular_file(const char* path) {
@@ -94,14 +93,8 @@ void process_file(const char* file_path) {
     total_files++;
     pthread_mutex_unlock(&mutex);
 
-    /*FILE* fp = fopen(output_file, "a");
-    if (fp != NULL) {
-
-        fprintf(fp, "%s\n", file_path);
-        fclose(fp);
-    }*/
-
     pthread_mutex_lock(&mutex);
+    //sleep(5);
     if (total_files % 5 == 0) {
         print_progress();
     }
@@ -133,16 +126,11 @@ void process_file(const char* file_path) {
                         pthread_mutex_unlock(&mutex);
                         
 
-                        strcpy(duplicate_files[count].filename , file_name);
+                        strcpy(duplicate_files[count].filename , file_name); //store in struct of duplicate_files
                         strcpy(duplicate_files[count].filepath , file_path);
                         
                         count++;
-                        /*printf("duple : %s\n", file_path);
-                        FILE* fp = fopen(output_file, "a");
-                        if (fp != NULL) {
-                            fprintf(fp, "aa-  %s\n", other_file_name);
-                            fclose(fp);
-                        }*/
+                        
                     }
                 }
 
@@ -175,9 +163,9 @@ void traverse_directory(const char* dir_path) {
         }
         
         snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name);
-        //printf("path%s\n",entry->d_name );
+       
         if (entry->d_type == DT_DIR) {
-            traverse_directory(path);
+            traverse_directory(path); // recursive
         } else {
             process_file(path);
         }
@@ -189,12 +177,9 @@ void traverse_directory(const char* dir_path) {
 
 void print_progress() {
     time_t current_time = time(NULL);
-    fprintf(stderr, "Search progress: %d files processed, %d duplicates found. Time: %s", total_files, total_duplicates, ctime(&current_time));
+    fprintf(stderr, "Search progress : %d files processed - %d duplicates found. Time: %s", total_files, total_duplicates, ctime(&current_time));
 }
-/*void print_progress() {
-    printf("Files processed: %d, Duplicates found: %d\n", total_files, total_duplicates);
-    fflush(stdout);
-}*/
+
 
 void* thread_work(void* arg) {
     char* dir_path = (char*)arg;
@@ -221,7 +206,7 @@ void print_result(){
                 first=0;
             }
             if(i%(num_threads+1)==0)
-                fprintf(fp, "%s,\n", duplicate_files[i].filepath);
+                fprintf(fp, "%s\n", duplicate_files[i].filepath);
         }
        
     }
@@ -311,7 +296,7 @@ int main(int argc, char* argv[]) {
         pthread_mutex_lock(&mutex);
         print_progress();
         pthread_mutex_unlock(&mutex);
-        
+
     }
     
     pthread_join(main_thread, NULL);
