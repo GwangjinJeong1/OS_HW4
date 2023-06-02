@@ -1,14 +1,14 @@
 # OS_HW4
 
-## build
+## Build
 ```c
 gcc -pthread -o findeq findeq.c
 ```
-## run the program
+## Run the program
 ```c
 ./findeq <OPTION> DIR
 ```
-## example
+## Example
 ```c
 ./findeq ./Files
 ```
